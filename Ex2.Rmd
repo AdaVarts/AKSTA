@@ -1,0 +1,234 @@
+---
+title: "Ex2"
+author: "Yelyzaveta Klysa"
+date: "2023-03-15"
+output: pdf_document
+---
+
+# Exercise 2
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(readxl)
+library(stringr)
+library(tidyverse)
+```
+
+## Task 1
+
+*From <https://datahub.io/core/country-codes> obtain the csv containing information related to the countries and load it in R. Keep only the columns containing official country name in English, ISO 3166 country codes with 2 and 3 alpha-numeric characters, development status (developing vs developed) and region and sub-region.*
+
+```{r}
+country_codes <- read.csv("country-codes_csv.csv")
+ccs <- select(country_codes, UNTERM.English.Formal, ISO3166.1.Alpha.2, ISO3166.1.Alpha.3, Developed...Developing.Countries, Region.Name, Sub.region.Name)
+```
+
+## Task 2
+
+*Load in R the following data sets which you can find in TUWEL. For each data set, ensure that missing values are read in properly, that column names are unambiguous. Each data set should contain at the end only two columns: country and the variable.*
+
+```{r}
+rd373 <- read.csv("rawdata_373.csv")
+rd343 <- read.fwf('rawdata_343.txt',widths = c(8, 66,4),sep="\t", skip = 2, col.names = c("index", "country_name", "median.Age"))
+rd343 <- select(rd343, country_name, median.Age)
+rd343$country_name <- sapply(rd343$country_name, str_trim)
+rd373$country_name <- sapply(rd373$country_name, str_trim)
+
+sapply(rd373, anyNA)
+sapply(rd343, anyNA)
+```
+
+## Task 3
+
+*Merge the two data sets containing raw data using dplyr function on the unique keys. Keep the union of all observations in the two tables. What key are you using for merging?*
+
+```{r}
+rdfull <- full_join(rd343, rd373, by = "country_name")
+```
+
+The join was done by country name.
+
+## Task 4
+
+*Merge the resulting data set above with the data set containing country information (from point 1) using dplyr functions on the unique keys. Name this new object df_vars.*
+
+```{r}
+df_vars <- left_join(rdfull, ccs, by=c('country_name'='UNTERM.English.Formal'))
+colSums(is.na(df_vars))
+```
+
+*Inspect the country names and check if it would be a reliable variable for matching. Why or why not?*
+
+The official country name is different from the ones in `rdfull` dataset. Its names correspond more to the UNTERM.English.Short, but the official name of the countries will not give the reliable merging.
+
+```{r}
+cia <- read_excel("CIA_factbook_matching_table_iso.xlsx")
+sapply(cia, anyNA)
+```
+
+```{r}
+df_vars <- left_join(rdfull, cia, by=c('country_name'='Country'))
+df_vars <- left_join(df_vars, ccs, by=c('ISO 3166 2'='ISO3166.1.Alpha.2', 'ISO 3166 3'='ISO3166.1.Alpha.3'))
+colSums(is.na(df_vars))
+```
+There are 17 countries that were not found in cia file:
+
+```{r}
+df_vars[is.na(df_vars$UNTERM.English.Formal), ]$country_name
+```
+
+Looking closer, 6 of the countries appear in short definition of the name in `country_codes` dataset.
+
+```{r}
+country_codes[country_codes$UNTERM.English.Short %in% df_vars[is.na(df_vars$UNTERM.English.Formal), ]$country_name, ]
+```
+
+And only 1 in formal name of the country dataset.
+
+```{r}
+ccs[ccs$UNTERM.English.Formal %in% df_vars[is.na(df_vars$UNTERM.English.Formal), ]$country_name, ]
+```
+
+Also 1 country is in `cia`, though in `ccs` in does not have `ISO 3166 2` value.
+
+```{r}
+cia[cia$Country %in% df_vars[is.na(df_vars$UNTERM.English.Formal), ]$country_name, ]
+```
+
+Let's firstly fill the data from `css` table.
+
+```{r}
+df_vars$Developed...Developing.Countries[is.na(df_vars$UNTERM.English.Formal)] <- ccs$Developed...Developing.Countries[match(df_vars$country_name,ccs$UNTERM.English.Formal)][which(is.na(df_vars$UNTERM.English.Formal))]
+
+df_vars$Region.Name[is.na(df_vars$UNTERM.English.Formal)] <- ccs$Region.Name[match(df_vars$country_name,ccs$UNTERM.English.Formal)][which(is.na(df_vars$UNTERM.English.Formal))]
+
+df_vars$Sub.region.Name[is.na(df_vars$UNTERM.English.Formal)] <- ccs$Sub.region.Name[match(df_vars$country_name,ccs$UNTERM.English.Formal)][which(is.na(df_vars$UNTERM.English.Formal))]
+
+df_vars$`ISO 3166 2`[is.na(df_vars$UNTERM.English.Formal)] <- ccs$ISO3166.1.Alpha.2[match(df_vars$country_name,ccs$UNTERM.English.Formal)][which(is.na(df_vars$UNTERM.English.Formal))]
+
+df_vars$`ISO 3166 3`[is.na(df_vars$UNTERM.English.Formal)] <- ccs$ISO3166.1.Alpha.3[match(df_vars$country_name,ccs$UNTERM.English.Formal)][which(is.na(df_vars$UNTERM.English.Formal))]
+
+df_vars$UNTERM.English.Formal[is.na(df_vars$UNTERM.English.Formal)] <- ccs$UNTERM.English.Formal[match(df_vars$country_name,ccs$UNTERM.English.Formal)][which(is.na(df_vars$UNTERM.English.Formal))]
+```
+
+```{r}
+ccs[ccs$UNTERM.English.Formal %in% df_vars[is.na(df_vars$UNTERM.English.Formal), ]$country_name, ]
+```
+
+Now let's put the one from `cia` dataframe:
+
+```{r}
+df_vars$`ISO 3166 3`[is.na(df_vars$UNTERM.English.Formal)] <- cia$`ISO 3166 3`[match(df_vars$country_name,cia$Country)][which(is.na(df_vars$UNTERM.English.Formal))]
+
+df_vars$Developed...Developing.Countries[is.na(df_vars$UNTERM.English.Formal)] <- ccs$Developed...Developing.Countries[match(df_vars$`ISO 3166 3`,ccs$ISO3166.1.Alpha.3)][which(is.na(df_vars$UNTERM.English.Formal))]
+
+df_vars$Region.Name[is.na(df_vars$UNTERM.English.Formal)] <- ccs$Region.Name[match(df_vars$`ISO 3166 3`,ccs$ISO3166.1.Alpha.3)][which(is.na(df_vars$UNTERM.English.Formal))]
+
+df_vars$Sub.region.Name[is.na(df_vars$UNTERM.English.Formal)] <- ccs$Sub.region.Name[match(df_vars$`ISO 3166 3`,ccs$ISO3166.1.Alpha.3)][which(is.na(df_vars$UNTERM.English.Formal))]
+
+df_vars$UNTERM.English.Formal[is.na(df_vars$UNTERM.English.Formal)] <- ccs$UNTERM.English.Formal[match(df_vars$`ISO 3166 3`,ccs$ISO3166.1.Alpha.3)][which(is.na(df_vars$UNTERM.English.Formal))]
+```
+
+## Task 5
+
+*Discuss on the tidyness of the data set df_vars. What are the observational units, what are the variables? What can be considered fixed vs measured variables? Tidy the data if needed.*
+
+The variables in this case are the columns and observational units are the rows (countries). 
+
+Fixed variables here are: country name, ISO 2 and 3, formal definition of the country name, region and sub region name. There are 3 measured variables: median age, youth unemployment rate and developed/developing columns. It can be questionable the consideration of the last column as a measured variable since it is a part of definition of the country, however its value is changing over time(even though this time is quite long period).
+
+Overall, the data in the `df_vars` is tidy. It does not contain scattered variables in multiple columns or combined variables, or observations in the columns. The only thing that might be useful to solve is the names of countries. There are 4 columns that represent the countries: `country_name`, `ISO 3166 2`, `ISO 3166 3` and `UNTERM.English.Formal`. They were used for merging. Though, if for some tasks later on they are needed, they should not be dropped. 
+
+Additionally, there are NaN values in some columns. I will not eliminate these rows for now.
+```{r}
+df_vars <- df_vars %>% mutate_if(is.character, ~na_if(., ''))
+```
+
+The columns can be organized by putting fixed variables first.
+
+```{r}
+df_vars <- select(df_vars, 1, 4, 5, 6, 8, 9, 7, 2, 3)
+```
+
+## Task 6
+
+*Count the number of developing vs. developed countries in the merged data set.*
+
+```{r}
+df_vars %>% count(Developed...Developing.Countries) %>% filter(Developed...Developing.Countries == "Developed" | Developed...Developing.Countries == "Developing")
+```
+
+## Task 7
+
+*Count how many countries per region does the merged data set contain.*
+
+```{r}
+df_vars %>% count(Region.Name) %>% filter(!is.na(Region.Name))
+```
+
+## Task 8
+
+*Count the number of developing vs. developed countries for each region.*
+
+```{r}
+df_vars %>% group_by(Developed...Developing.Countries) %>% count(Region.Name) %>% filter(!is.na(Region.Name))
+```
+
+## Task 9
+
+*Create a table of average values and the standard deviation for both median age and youth unemployment rate separated into developing and developed countries (hint: eliminate observations with missing development status beforehand). Comment briefly on the results.*
+
+```{r}
+# omit rows with nan in developing status
+df_vars_9 <- df_vars[!is.na(df_vars$Developed...Developing.Countries),]
+```
+
+```{r}
+df_ave_sd_dev <- df_vars_9 %>% group_by(Developed...Developing.Countries) %>% summarise(age_mean=mean(median.Age), age_std = sd(median.Age, na.rm=TRUE), yur_mean=mean(youth_unempl_rate, na.rm=TRUE), yur_std = sd(youth_unempl_rate, na.rm=TRUE))
+df_ave_sd_dev
+```
+
+
+## Task 10
+
+*Repeat the analysis in the previous task for each development status and region combination.*
+
+```{r}
+df_ave_sd_dev_reg <- df_vars_9 %>% group_by(Developed...Developing.Countries, Region.Name) %>%
+  summarise(age_mean=mean(median.Age), age_std = sd(median.Age, na.rm=TRUE), yur_mean=mean(youth_unempl_rate, na.rm=TRUE), yur_std = sd(youth_unempl_rate, na.rm=TRUE), .groups="keep")
+df_ave_sd_dev_reg
+```
+
+
+## Task 11
+
+*In df_vars create two additional indicator variable above_average_median_age which contains a yes is the country’s median age lies above the region average and no otherwise. Create another above_average_yu which contains the same information but for the youth unemployment variable.*
+
+```{r}
+df_vars <- left_join(df_vars, 
+                     df_ave_sd_dev_reg, 
+                     by=c("Developed...Developing.Countries", "Region.Name")) %>% 
+  mutate(
+    above_average_median_age = if_else(median.Age>age_mean, 
+                                       "yes", 
+                                       "no"),
+    above_average_yu = if_else(youth_unempl_rate>yur_mean, 
+                               "yes", 
+                               "no")) %>% 
+  select(-c(age_mean, age_std, yur_mean, yur_std))
+
+df_vars
+```
+
+
+## Task 12
+
+*Export the final data set to a csv with “;” separator and “.” as a symbol for missing values; no rownames should be included in the csv. Upload the .csv to TUWEL together with your .Rmd and PDF.*
+
+```{r}
+write.table(df_vars, file = "final.csv", sep = ";", row.names = FALSE, na = ".")
+```

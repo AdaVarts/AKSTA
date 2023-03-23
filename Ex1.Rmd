@@ -1,0 +1,224 @@
+---
+title: "Ex1"
+author: "Yelyzaveta Klysa"
+date: "2023-03-15"
+output: pdf_document
+---
+
+# Exercise 1
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+set.seed(1234)
+library(microbenchmark)
+```
+
+## Ratio of Fibonacci numbers
+
+### 1. *Write two different R functions which return the sequence rn = Fn+1/Fn where Fn is the nth Fibonacci number, once using for and once using while.*
+
+```{r}
+fibonacci <- function(n) {
+  sequence = c(1, 1)
+  if (n > 1) {
+    for (i in 2:n+1) {
+      sequence[i] = sequence[i-1] + sequence[i-2]
+    }
+  }
+  sequence
+}
+
+function_for <- function(n) {
+  fibseq = fibonacci(n)
+  res = c()
+  for (i in 1:n) {
+    res[i] = fibseq[i+1]/fibseq[i]
+  }
+  res
+}
+
+function_while <- function(n) {
+  fibseq = fibonacci(n)
+  res = c()
+  i = 1
+  while (i <= n) {
+    res[i] = fibseq[i+1]/fibseq[i]
+    i = i+1
+  }
+  res
+}
+```
+
+```{r}
+function_for(4)
+```
+
+```{r}
+function_while(4)
+```
+
+### 2. *Benchmark the two functions for n = 100 and n = 1000 (you can use package microbenchmark or package bench for this purpose). Which function is faster?*
+
+```{r}
+mbm <- microbenchmark("for" = {
+            function_for(8)
+          },
+          "while" = {
+            function_while(8)
+          })
+mbm
+```
+
+It looks like for small numbers the `while` loop takes less time.
+
+### 3. *Plot the sequence for n = 100. For which n it starts to converge? What is this number?*
+
+```{r}
+mbm <- microbenchmark("for" = {
+            function_for(100)
+          },
+          "while" = {
+            function_while(100)
+          })
+mbm
+```
+
+```{r}
+library(ggplot2)
+autoplot(mbm)
+```
+
+## The golden ratio
+
+```{r}
+gr = (1+sqrt(5))/2
+ratio <- function_while(1000)
+plot(ratio, pch=19,col='red')
+lines(ratio, pch=19,col='red')
+abline(h=gr, col='blue')
+legend('topright', legend=c('f(i)/f(i-1)', 'Golden Ratio'), col=c('red', 'blue'), lwd=2)
+```
+
+```{r}
+all.equal(ratio, rep(c(gr),times=1000))
+```
+
+```{r}
+ratio == rep(c(gr),times=1000)
+```
+
+With using `all.equal` function we get the difference between the values. And it seems like it is not big: `0.002261732`. In the plot before we can see that the difference is mainly present in the beginning, since the values there are: `1.0, 2.0, 1.5`.
+
+However `==` operator checks each value and we can observe that majority is the TRUE. We get precise answer to the question whether the ratio between two values is golden ratio or not.
+
+## Game of craps
+
+*The game of craps is played as follows. First, you roll two six-sided dice; let x be the sum of the dice on the first roll. If x = 7 or 11 you win, otherwise you keep rolling until either you get x again, in which case you also win, or until you get a 7 or 11, in which case you lose. Write a program in R to simulate a game of craps. Explain the steps of your program. If the code is not explained, no points will be earned.*
+
+```{r}
+# a function to generate 2 numbers from 1 to 6 (simulating the rolling of 2 dices)
+rollthedices <- function() {
+  sum(floor(runif(2, min=1, max=6)))
+}
+
+game <- function() {
+  first_point <- rollthedices()                # roll the dices for the first time
+  print(first_point)
+  if (first_point == 7 | first_point == 11){   # if it is 7 or 11, you win
+    cat("You won: ", first_point)
+  } else {                                     # otherwise we continue
+    i = 1
+    while (i == 1) {                           # infinity loop to throw the dice until some condition is met
+      point <- rollthedices()                  # throw the dices again
+      print(point)
+      if (point == first_point) {              # if the sum of the dice is equal to the first roll
+        cat("You won: ", point)                # you win
+        i = 0
+      } else if (point == 7 | point == 11) {   # if the sum is 7 or 11
+        cat("You lost: ", point)               # you lose
+        i = 0
+      }
+    }
+  }
+}
+
+game()
+```
+
+## Readable and efficient code
+
+```{r}
+foobar0 <- function(x, z) {                  # Previous code
+  set.seed(1)
+  x <- rnorm(100)
+  z <- rnorm(100)
+  if (sum(x >= .001) < 1) {
+    stop("step 1 requires 1 observation(s) with value >= .001")
+  }
+  fit <- lm(x ~ z)
+  r <- fit$residuals
+  x <- sin(r) + .01
+  if (sum(x >= .002) < 2) {
+    stop("step 2 requires 2 observation(s) with value >= .002")
+  }
+  fit <- lm(x ~ z)
+  r <- fit$residuals
+  x <- 2 * sin(r) + .02
+  if (sum(x >= .003) < 3) {
+    stop("step 3 requires 3 observation(s) with value >= .003")
+  }
+  fit <- lm(x ~ z)
+  r <- fit$residuals
+  x <- 3 * sin(r) + .03
+  if (sum(x >= .004) < 4) {
+    stop("step 4 requires 4 observation(s) with value >= .004")
+  }
+  fit <- lm(x ~ z)
+  r <- fit$residuals
+  x <- 4 * sin(r) + .04
+  x
+}
+```
+
+```{r}
+generateInput <- function() {             # Generate the values
+  set.seed(1)
+  x <- rnorm(100)
+  z <- rnorm(100)
+  res <- list("x" = x, "z" = z)
+  return(res)
+}
+
+runlm <- function(x, z, c) {              # Run the repeatable computation
+  fit <- lm(x ~ z)
+  r <- fit$residuals
+  x <- c*100*sin(r) + c
+  return(x)
+}
+
+check <- function(x, c) {                 # Check the input values
+  if (sum(x >= c/100) < c) {
+    stop(paste("step", c, "requires", c, "observation(s) with value >=", c/100))
+  }
+}
+
+foobar <- function(x, z) {                # Rewritten function
+  check(x, 1)
+  x <- runlm(x, z, .01)
+  check(x, 2)
+  x <- runlm(x, z, .02)
+  check(x, 3)
+  x <- runlm(x, z, .03)
+  check(x, 4)
+  x <- runlm(x, z, .04)
+  return(x)
+}
+```
+
+```{r}
+inp <- generateInput()
+all.equal(foobar(inp$x, inp$z), foobar0(inp$x, inp$z))
+```
